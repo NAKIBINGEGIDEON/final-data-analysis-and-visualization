@@ -11,74 +11,88 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+import plotly.express as px
 from typing import Any
-
+import pandas as pd
 import numpy as np
 
 import streamlit as st
 from streamlit.hello.utils import show_code
 
+# Define countries with latitude and longitude data
+countries = {
+    'Nigeria': {'lat': 9.082, 'lon': 8.675},
+    'Ivory Coast': {'lat': 7.54, 'lon': -5.5471},
+    'Kenya': {'lat': 1.2921, 'lon': 36.8219},
+    'Mozambique': {'lat': -18.665695, 'lon': 35.529562},
+    'Ivory Coast (Côte d\'Ivoire)': {'lat': 7.54, 'lon': -5.5471}  # Adding for Ivory Coast alias
+}
 
-def animation_demo() -> None:
+# Function to load data from GitHub
+def load_data_from_github(url):
+    try:
+        data = pd.read_csv(url)
+        return data
+    except Exception as e:
+        st.error(f"An error occurred while loading the data: {str(e)}")
+        return None
 
-    # Interactive Streamlit elements, like these sliders, return their value.
-    # This gives you an extremely simple interaction model.
-    iterations = st.sidebar.slider("Level of detail", 2, 20, 10, 1)
-    separation = st.sidebar.slider("Separation", 0.7, 2.0, 0.7885)
+# Function to plot percentage bar chart
+def plot_percentage_bar_chart(data, column):
+    category_percentage = data[column].value_counts(normalize=True) * 100
+    fig = px.bar(category_percentage, x=category_percentage.index, y=category_percentage.values,
+                 labels={'x': f'{column}', 'y': 'Percentage'},
+                 title=f'Percentage of {column} by Category',
+                 color=category_percentage.index,
+                 color_discrete_sequence=px.colors.qualitative.Plotly)
+    fig.update_traces(texttemplate='%{y:.0f}%', textposition='outside')
+    fig.update_layout(xaxis_title=None, yaxis_title=None)
+    st.plotly_chart(fig)
 
-    # Non-interactive elements return a placeholder to their location
-    # in the app. Here we're storing progress_bar to update it later.
-    progress_bar = st.sidebar.progress(0)
+# Main function for Streamlit app
+def main():
+    st.set_page_config(
+        page_title="Impact of COVID-19 in Sub-Saharan Africa",
+        page_icon="🌍"
+    )
 
-    # These two elements will be filled in later, so we create a placeholder
-    # for them using st.empty()
-    frame_text = st.sidebar.empty()
-    image = st.empty()
+    st.title("Exploratory Data Analysis")
 
-    m, n, s = 960, 640, 400
-    x = np.linspace(-m / s, m / s, num=m).reshape((1, m))
-    y = np.linspace(-n / s, n / s, num=n).reshape((n, 1))
+    # Get URL of the dataset on GitHub
+    github_url = "https://raw.githubusercontent.com/NAKIBINGEGIDEON/data-analysis-and-visualization-project/92354269f67066df75a9fb6e47cbdcc820cbfc78/data.csv"
 
-    for frame_num, a in enumerate(np.linspace(0.0, 4 * np.pi, 100)):
-        # Here were setting value for these two elements.
-        progress_bar.progress(frame_num)
-        frame_text.text("Frame %i/100" % (frame_num + 1))
+    # Load the dataset
+    data = load_data_from_github(github_url)
 
-        # Performing some fractal wizardry.
-        c = separation * np.exp(1j * a)
-        Z = np.tile(x, (n, 1)) + 1j * np.tile(y, (1, m))
-        C = np.full((n, m), c)
-        M: Any = np.full((n, m), True, dtype=bool)
-        N = np.zeros((n, m))
+    if data is not None:
+        st.header("Dataset Preview:")
+        st.write(data.head())
 
-        for i in range(iterations):
-            Z[M] = Z[M] * Z[M] + C[M]
-            M[np.abs(Z) > 2] = False
-            N[M] = i
+    # Filter countries
+    selected_country = st.multiselect("Select Countries", list(countries.keys()), default=list(countries.keys()))
 
-        # Update the image placeholder by calling the image() function on it.
-        image.image(1.0 - (N / N.max()), use_column_width=True)
+    # Filter columns
+    if data is not None:
+        selected_columns = st.multiselect("Select Columns", data.columns)
 
-    # We clear elements by calling empty on them.
-    progress_bar.empty()
-    frame_text.empty()
+        if selected_country:
+            filtered_data = data[data['Country'].isin(selected_country)]
+        else:
+            filtered_data = data
 
-    # Streamlit widgets automatically run the script from top to bottom. Since
-    # this button is not connected to any other logic, it just causes a plain
-    # rerun.
-    st.button("Re-run")
+        if selected_columns:
+            filtered_data = filtered_data[selected_columns]
 
+        # Display filtered data
+        st.subheader("Filtered Data")
+        st.write(filtered_data)
 
-st.set_page_config(page_title="Animation Demo", page_icon="📹")
-st.markdown("# Animation Demo")
-st.sidebar.header("Animation Demo")
-st.write(
-    """This app shows how you can use Streamlit to build cool animations.
-It displays an animated fractal based on the the Julia Set. Use the slider
-to tune different parameters."""
-)
+        # Plot interactive bar charts showing percentages
+        if not filtered_data.empty and selected_columns:
+            for column in selected_columns:
+                st.subheader(f"Percentage of {column} by Category")
+                plot_percentage_bar_chart(filtered_data, column)
 
-animation_demo()
-
-show_code(animation_demo)
+# Entry point of the Streamlit app
+if __name__ == "__main__":
+    main()
